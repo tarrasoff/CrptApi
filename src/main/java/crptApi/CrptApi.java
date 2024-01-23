@@ -1,9 +1,12 @@
 package crptApi;
 
 import com.google.common.util.concurrent.RateLimiter;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.*;
 import jakarta.validation.Valid;
 import lombok.*;
+import lombok.extern.slf4j.Slf4j;
 import org.hibernate.annotations.CreationTimestamp;
 import org.mapstruct.InjectionStrategy;
 import org.mapstruct.Mapper;
@@ -31,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 
 @SpringBootApplication
 @EnableRetry
+@Slf4j
 public class CrptApi {
 
     public static void main(String[] args) {
@@ -64,11 +68,14 @@ public class CrptApi {
     @RestController
     @RequiredArgsConstructor
     @RequestMapping("/api/v3/lk/documents")
+    @Tag(name = "CrptApi", description = "Api for crpt")
     static class DocumentController {
         private final DocumentService documentService;
 
         @PostMapping("/create")
+        @Operation(summary = "Create document")
         public DocumentDto document(@Valid @RequestBody DocumentDto documentDto) {
+            log.info("Creating a new document");
             return documentService.createDocument(documentDto);
         }
     }
@@ -84,11 +91,13 @@ public class CrptApi {
         @Retryable(maxAttempts = 5, backoff = @Backoff(delay = 5), retryFor = RateLimitExceededException.class)
         public DocumentDto createDocument(DocumentDto documentDto) {
             if (!rateAccessLimiter.checkAvailableRate()) {
+                log.error("Exceeded the rate limit in {}", rateAccessLimiter.getTimeUnit());
                 throw new RateLimitExceededException(
                         String.format("Exceeded the rate limit in %s", rateAccessLimiter.getTimeUnit()));
             }
             Document newDocument = documentMapper.toEntity(documentDto);
             newDocument = documentRepository.save(newDocument);
+            log.info("Created a new document");
             return documentMapper.toDto(newDocument);
         }
     }
